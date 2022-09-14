@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rustix = "0.35.9"
-
-[features]
-rustix = ["fs"]
+linux-raw-sys = "0.0.46"
+packed_struct = "0.10.0"
+rustix = { version = "0.35.9", features = ["fs"] }
