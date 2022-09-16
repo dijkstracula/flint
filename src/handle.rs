@@ -1,5 +1,7 @@
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{Read, Write, Seek, Cursor};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use linux_raw_sys::general::S_IFBLK;
@@ -8,7 +10,7 @@ use rustix::fs::{fstat};
 use rustix::io::Errno;
 
 use crate::errors::Error;
-use crate::fs::{Header, MAGIC_BYTES};
+use crate::fs::{Block, Header, MAGIC_BYTES};
 
 pub struct Handle<F: Read + Write + Seek> {
     backing_store: F,
@@ -25,6 +27,7 @@ pub fn for_block_device(filename: &str) -> Result<Handle<File>, Error> {
     let f = File::options()
         .read(true)
         .write(true)
+        .custom_flags(linux_raw_sys::general::O_DIRECT.try_into().unwrap())
         .open(path)
         .map_err(|e| Errno::from_io_error(&e).expect("Invalid Errno???"))?;
 
@@ -45,13 +48,10 @@ impl<F: Read + Write + Seek> Handle<F> {
     fn new(backing_store: F) -> Result<Handle<F>, Error> {
         let mut h = Handle { backing_store: backing_store };
 
-        let mut magic: [u8; 4] = [0; 4]; // TODO: init
+        let mut block = Block::new();
+        block.read_from(&mut h.backing_store)?;
 
-        let n = h.backing_store.read(&mut magic)?;
-        if n != 4 {
-            return Err(Error::Errno(Errno::IO.raw_os_error()));
-        }
-        if magic != MAGIC_BYTES {
+        if block[0..4] != MAGIC_BYTES {
             h.init()?;
         }
 
@@ -66,19 +66,16 @@ impl<F: Read + Write + Seek> Handle<F> {
 
     pub fn write(&mut self, blob: &[u8], posn: usize) -> Result<usize, Error> {
         let (nblock, offset) = block_offset_for(posn);
-        let mut block: [u8; 512] = [0; 512];
 
         self.backing_store.seek(std::io::SeekFrom::Start(nblock as u64))?;
 
-        /* XXX: larger than one block; straddling one block! */
-        let n = self.backing_store.read(&mut block)?;
-        if n != 512 {
-            return Err(Error::Errno(Errno::IO.raw_os_error()));
-        }
+        let mut block = Block::new();
+        block.read_from(&mut self.backing_store)?;
 
         block[offset..offset + blob.len()].copy_from_slice(blob);
 
-        self.backing_store.write_all(&block)?;
+        block.write_to(&mut self.backing_store)?;
+
 
         Ok(blob.len())
     }
