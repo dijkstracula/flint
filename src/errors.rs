@@ -4,6 +4,7 @@ use rustix::io::Errno;
 #[derive(Debug)]
 pub enum Error {
     UnknownErrno,
+    NotABlockDevice,
     Errno(i32),
     FailedSerialization,
 }
