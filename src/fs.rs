@@ -1,11 +1,9 @@
 use packed_struct::prelude::*;
 
-use std::{io::{Read, Write}, ops::{Index, Range, IndexMut}};
-
-use crate::errors::*;
 
 pub const MAGIC_BYTES: [u8; 4] = [0x42, 0x45, 0x56, 0x4f];
 
+/// A Header needs to be present on block 0 of a block device.
 #[derive(PackedStruct)]
 #[packed_struct(bit_numbering="msb0")]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -21,47 +19,11 @@ impl Header {
     }
 
     pub fn validate(&self) -> bool {
+        // TODO: maybe this should consume a Block instead?
         self.magic == MAGIC_BYTES
     }
 }
 
-#[repr(C, align(512))]
-pub struct Block([u8; 512]);
-
-impl Block {
-    pub fn new() -> Block {
-        Block([0; 512])
-    }
-
-    pub fn read_from<R>(&mut self, r: &mut R) -> Result<(), Error> where R: Read {
-        r.read_exact(&mut self.0)?;
-        Ok(())
-    }
-
-    pub fn write_to<W>(&self, w: &mut W) -> Result<(), Error> where W: Write {
-        w.write_all(&self.0)?;
-        Ok(())
-    }
-}
-
-impl Index<usize> for Block {
-    type Output = u8;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
-}
-impl Index<Range<usize>> for Block {
-    type Output = [u8];
-    fn index(&self, index: Range<usize>) -> &Self::Output {
-        &self.0[..][index]
-    }
-}
-
-impl IndexMut<Range<usize>> for Block {
-    fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
-        &mut self.0[..][index]
-    }
-}
 
 #[cfg(test)]
 mod tests {
