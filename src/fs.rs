@@ -27,7 +27,7 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use crate::handle;
+    use crate::{handle, buffer::Buffer};
 
     #[test]
     fn fs_on_blk_dev() {
@@ -37,11 +37,13 @@ mod tests {
 
         let h = handle::for_block_device("/dev/xvdb");
         assert!(!h.is_err());
-
         let mut h = h.unwrap();
 
-        let res = h.write("Writing to offset 1".as_bytes(), 1);
-        let res = res.map_err(|e| { println!("{:?}", e); e} );
+        let msg = "Writing to offset 1 in block 0".as_bytes();
+        let mut buf = Buffer::new(1);
+        buf.data[1..(1 + msg.len())].copy_from_slice(&msg);
+
+        let res = h.write(&buf, 0);
         assert!(res.is_ok());
     }
 
@@ -49,10 +51,13 @@ mod tests {
     fn fs_in_mem() {
         let h = handle::for_inmem(2);
         assert!(!h.is_err());
-
         let mut h = h.unwrap();
 
-        let res = h.write("Writing to offset 1".as_bytes(), 1);
+        let msg = "Writing to offset 1 in block 0".as_bytes();
+        let mut buf = Buffer::new(1);
+        buf.data[1..(1 + msg.len())].copy_from_slice(&msg);
+
+        let res = h.write(&buf, 0);
         assert!(res.is_ok());
     }
 }

@@ -1,10 +1,8 @@
-use std::{alloc::{Layout, Allocator, Global}, io::{Read, Write}, ops::{Index, IndexMut, Range}};
-
-use crate::errors::Error;
+use std::{alloc::{Layout, Allocator, Global}, ops::{Index, IndexMut, Range}};
 
 const BYTES_PER_BLOCK: usize = 512;
 
-struct BufferAlloc;
+pub struct BufferAlloc;
 
 unsafe impl Allocator for BufferAlloc {
     fn allocate(&self, layout: Layout) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
@@ -19,35 +17,36 @@ unsafe impl Allocator for BufferAlloc {
 
 /// A Buffer marshals data to be written to or having been read from a block device.
 pub struct Buffer {
-    n_blocks: usize,
-    data: Box<[u8], BufferAlloc>,
+    pub n_blocks: usize,
+    pub data: Box<[u8], BufferAlloc>,
 }
 
+
 impl Buffer {
-    pub fn new(blocks: usize) -> Buffer {
+
+    fn blocks_required_for(s: usize) -> usize {
+        if s == 0 {
+            return 1; // TODO: ???
+        }
+        if s % 512 == 0 {
+            return s / BYTES_PER_BLOCK;
+        }
+        return s / BYTES_PER_BLOCK + 1;
+    }
+
+    pub fn new(sz_bytes: usize) -> Buffer {
+        let blocks_reqd = Buffer::blocks_required_for(sz_bytes);
+        let buf_sz = blocks_reqd * 512;
         unsafe {
             let uninited: Box<[u8], BufferAlloc> = 
-                Box::new_uninit_slice_in(blocks * BYTES_PER_BLOCK, BufferAlloc).assume_init();
+                Box::new_zeroed_slice_in(
+                    buf_sz, 
+                    BufferAlloc).assume_init();
             Buffer {
                 data: uninited,
-                n_blocks: blocks
+                n_blocks: blocks_reqd
             }
         }
-    }
-
-    // TODO: maybe just consume a Handle
-    pub fn read_from<R>(&mut self, r: &mut R) -> Result<(), Error> where R: Read {
-        r.read_exact(&mut self.data)?;
-        Ok(())
-    }
-
-    pub fn write_to<W>(&self, w: &mut W) -> Result<(), Error> where W: Write {
-        // TODO: mark dirty blocks and write those out.
-        // TODO: at some point we would decide "enough blocks are dirty so we should
-        // redundantly write clean blocks to minimise write calls".  What's a good
-        // metric?
-        w.write_all(&self.data)?;
-        Ok(())
     }
 }
 
@@ -73,17 +72,30 @@ impl IndexMut<Range<usize>> for Buffer {
 
 #[cfg(test)]
 mod tests {
-    use std::mem;
-
-    use crate::{buffer::{Buffer, BYTES_PER_BLOCK}};
+    use crate::{buffer::Buffer};
 
     #[test]
     fn test_alignment() {
-        const BLOCKS: usize = 14;
-        let b = Buffer::new(BLOCKS);
+        const BYTES: usize = 14;
+        let b = Buffer::new(BYTES);
 
-        assert_eq!(b.n_blocks, BLOCKS);
-        assert_eq!(b.data.len(), BYTES_PER_BLOCK * BLOCKS);
+        assert_eq!(b.n_blocks, 1);
+        assert_eq!(b.data.len(), 512);
         assert!(b.data.as_ptr().is_aligned_to(512));
+    }
+
+    #[test]
+    fn test_blocks_required_for() {
+        assert_eq!(Buffer::blocks_required_for(0), 1);
+        assert_eq!(Buffer::blocks_required_for(1), 1);
+        assert_eq!(Buffer::blocks_required_for(10), 1);
+        assert_eq!(Buffer::blocks_required_for(512), 1);
+
+        assert_eq!(Buffer::blocks_required_for(513), 2);
+        assert_eq!(Buffer::blocks_required_for(1000), 2);
+        assert_eq!(Buffer::blocks_required_for(1023), 2);
+        assert_eq!(Buffer::blocks_required_for(1024), 2);
+
+        assert_eq!(Buffer::blocks_required_for(1025), 3);
     }
 }

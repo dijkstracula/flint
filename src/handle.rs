@@ -17,21 +17,11 @@ pub struct Handle<F: Read + Write + Seek> {
     backing_store: F,
 }
 
-fn blocks_required_for(s: usize) -> usize {
-    if s == 0 {
-        return 1; // TODO: ???
-    }
-    if s % 512 == 0 {
-        return s / 512;
-    }
-    return s / 512 + 1;
-}
-
 fn block_offset_for(fpos: usize) -> (usize, usize) {
     let fpos = fpos + 512; /* For the header */
     (fpos & !((1 << 9) - 1), fpos & (1 << 9) - 1)
 }
-   
+
 pub fn for_block_device(filename: &str) -> Result<Handle<File>, Error> {
     let path = Path::new(filename);
 
@@ -59,11 +49,12 @@ impl<F: Read + Write + Seek> Handle<F> {
     fn new(backing_store: F) -> Result<Handle<F>, Error> {
         let mut h = Handle { backing_store: backing_store };
 
+        h.backing_store.seek(std::io::SeekFrom::Start(0))?;
         let mut buf = Buffer::new(1);
-        buf.read_from(&mut h.backing_store)?;
+        h.backing_store.read(&mut buf.data)?;
 
         if buf[0..4] != MAGIC_BYTES {
-            h.init()?;
+            h.init()?; // TODO: need to write this out at a block size
         }
 
         Ok(h)
@@ -71,23 +62,19 @@ impl<F: Read + Write + Seek> Handle<F> {
 
     fn init(&mut self) -> Result<(), Error> {
         let blob = Header::new().pack()?;
-        self.backing_store.write_all(&blob)?;
+
+        let mut buf = Buffer::new(1);
+        buf.data[0..blob.len()].copy_from_slice(&blob);
+
+        self.backing_store.write_all(&buf.data)?;
         Ok(())
     }
 
-    pub fn write(&mut self, blob: &[u8], offset: usize) -> Result<usize, Error> {
-        let mut buf = Buffer::new(blocks_required_for(blob.len()));
-
-        let (nblock, offset) = block_offset_for(offset);
-        self.backing_store.seek(std::io::SeekFrom::Start(nblock as u64))?;
-        buf.read_from(&mut self.backing_store)?;
-
-        buf[offset..offset + blob.len()].copy_from_slice(blob);
-
-        buf.write_to(&mut self.backing_store)?;
-
-
-        Ok(blob.len())
+    pub fn write(&mut self, buf: &Buffer, blk_offset: usize) -> Result<(), Error> {
+        let byte_offset: u64 = blk_offset as u64 * 512;
+        self.backing_store.seek(std::io::SeekFrom::Start(byte_offset))?;
+        let res = self.backing_store.write_all(&buf.data)?;
+        Ok(res)
     }
 
 }
@@ -108,18 +95,4 @@ mod tests {
         assert_eq!(o, 1);
     }
 
-    #[test]
-    fn test_blocks_required_for() {
-        assert_eq!(blocks_required_for(0), 1);
-        assert_eq!(blocks_required_for(1), 1);
-        assert_eq!(blocks_required_for(10), 1);
-        assert_eq!(blocks_required_for(512), 1);
-
-        assert_eq!(blocks_required_for(513), 2);
-        assert_eq!(blocks_required_for(1000), 2);
-        assert_eq!(blocks_required_for(1023), 2);
-        assert_eq!(blocks_required_for(1024), 2);
-
-        assert_eq!(blocks_required_for(1025), 3);
-    }
 }
