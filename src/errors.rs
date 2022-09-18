@@ -7,6 +7,7 @@ pub enum Error {
     NotABlockDevice,
     Errno(i32),
     FailedSerialization,
+    AfterEOFAccess,
 }
 
 impl From<PackingError> for Error {

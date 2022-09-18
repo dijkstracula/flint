@@ -14,12 +14,14 @@ use crate::fs::{Header, MAGIC_BYTES};
 
 pub struct Handle<F: Read + Write + Seek> {
     backing_store: F,
+    len: u64,
 }
 
 fn byte_offset_for(block: usize) -> u64 {
     512 + block as u64 * 512
 }
 
+// TODO: #[cfg(target_os = "linux")] but also squelch unused import warning
 pub fn for_block_device(filename: &str) -> Result<Handle<File>, Error> {
     let path = Path::new(filename);
 
@@ -30,7 +32,7 @@ pub fn for_block_device(filename: &str) -> Result<Handle<File>, Error> {
         .open(path)?;
 
     let stat = fstat(&f)?;
-    if stat.st_mode & S_IFBLK == 0 {
+    if (stat.st_mode as u32) & S_IFBLK == 0 {
         return Err(Error::NotABlockDevice);
     }
 
@@ -43,8 +45,12 @@ pub fn for_inmem(blocks: usize) -> Result<Handle<Cursor<Vec<u8>>>, Error> {
 
 
 impl<F: Read + Write + Seek> Handle<F> {
-    fn new(backing_store: F) -> Result<Handle<F>, Error> {
-        let mut h = Handle { backing_store: backing_store };
+    fn new(mut backing_store: F) -> Result<Handle<F>, Error> {
+        let mut h = Handle { 
+            len: (&mut backing_store).stream_len()?,
+            backing_store: backing_store,
+        };
+
         let mut buf = Buffer::new(1);
 
         h.backing_store.rewind()?;
@@ -70,6 +76,9 @@ impl<F: Read + Write + Seek> Handle<F> {
 
     pub fn read(&mut self, buf: &mut Buffer, block: usize) -> Result<(), Error> {
         let byte_offset: u64 = byte_offset_for(block);
+        if byte_offset + buf.data.len() as u64 > self.len {
+            return Err(Error::AfterEOFAccess);
+        }
 
         self.backing_store.seek(std::io::SeekFrom::Start(byte_offset))?;
         let res = self.backing_store.read_exact(&mut buf.data)?;
@@ -78,8 +87,12 @@ impl<F: Read + Write + Seek> Handle<F> {
 
     pub fn write(&mut self, buf: &Buffer, block: usize) -> Result<(), Error> {
         let byte_offset: u64 = byte_offset_for(block);
+        if byte_offset + buf.data.len() as u64 > self.len {
+            return Err(Error::AfterEOFAccess);
+        }
 
         self.backing_store.seek(std::io::SeekFrom::Start(byte_offset))?;
+
         let res = self.backing_store.write_all(&buf.data)?;
         Ok(res)
     }
