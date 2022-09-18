@@ -1,12 +1,12 @@
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::{Read, Write, Seek, Cursor};
+use std::io::{Cursor, Read, Seek, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use linux_raw_sys::general::S_IFBLK;
 use packed_struct::PackedStruct;
-use rustix::fs::{fstat};
+use rustix::fs::fstat;
 
 use crate::buffer::Buffer;
 use crate::errors::Error;
@@ -43,10 +43,9 @@ pub fn for_inmem(blocks: usize) -> Result<Handle<Cursor<Vec<u8>>>, Error> {
     Handle::new(Cursor::new(vec![0; 512 + blocks * 512]))
 }
 
-
 impl<F: Read + Write + Seek> Handle<F> {
     fn new(mut backing_store: F) -> Result<Handle<F>, Error> {
-        let mut h = Handle { 
+        let mut h = Handle {
             len: (&mut backing_store).stream_len()?,
             backing_store: backing_store,
         };
@@ -57,7 +56,7 @@ impl<F: Read + Write + Seek> Handle<F> {
         h.backing_store.read(&mut buf.data)?;
 
         if buf[0..4] != MAGIC_BYTES {
-            h.init()?; 
+            h.init()?;
         }
 
         Ok(h)
@@ -80,7 +79,8 @@ impl<F: Read + Write + Seek> Handle<F> {
             return Err(Error::AfterEOFAccess);
         }
 
-        self.backing_store.seek(std::io::SeekFrom::Start(byte_offset))?;
+        self.backing_store
+            .seek(std::io::SeekFrom::Start(byte_offset))?;
         let res = self.backing_store.read_exact(&mut buf.data)?;
         Ok(res)
     }
@@ -91,12 +91,12 @@ impl<F: Read + Write + Seek> Handle<F> {
             return Err(Error::AfterEOFAccess);
         }
 
-        self.backing_store.seek(std::io::SeekFrom::Start(byte_offset))?;
+        self.backing_store
+            .seek(std::io::SeekFrom::Start(byte_offset))?;
 
         let res = self.backing_store.write_all(&buf.data)?;
         Ok(res)
     }
-
 }
 
 #[cfg(test)]
@@ -108,5 +108,4 @@ mod tests {
         assert_eq!(byte_offset_for(0), 512);
         assert_eq!(byte_offset_for(1), 1024);
     }
-
 }

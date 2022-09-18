@@ -1,16 +1,15 @@
 use packed_struct::prelude::*;
 
-
 pub const MAGIC_BYTES: [u8; 4] = [0x42, 0x45, 0x56, 0x4f];
 
 /// A Header needs to be present on block 0 of a block device.
 #[derive(PackedStruct)]
-#[packed_struct(bit_numbering="msb0")]
+#[packed_struct(bit_numbering = "msb0")]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Header {
     // 0x42, 0x45, 0x56, 0x4f
-    #[packed_field(bits="0..=31")]
-    magic: [u8; 4]
+    #[packed_field(bits = "0..=31")]
+    magic: [u8; 4],
 }
 
 impl Header {
@@ -24,12 +23,11 @@ impl Header {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::{handle, buffer::Buffer};
+    use crate::{buffer::Buffer, handle};
 
-    /* 
+    /*
     #[test]
     fn fs_on_blk_dev() {
         assert!(handle::for_block_device("/dev/nonexistent").is_err());
@@ -54,7 +52,7 @@ mod tests {
         let h = handle::for_inmem(1);
         assert!(!h.is_err());
         let mut h = h.unwrap();
-        
+
         let mut buf = Buffer::new(1);
 
         let msg = "Writing to offset 1 in block 0".as_bytes();
@@ -68,6 +66,5 @@ mod tests {
 
         let res = h.write(&buf, 42);
         assert!(!res.is_ok());
-        
     }
 }

@@ -1,4 +1,7 @@
-use std::{alloc::{Layout, Allocator, Global}, ops::{Index, IndexMut, Range}};
+use std::{
+    alloc::{Allocator, Global, Layout},
+    ops::{Index, IndexMut, Range},
+};
 
 const BYTES_PER_BLOCK: usize = 512;
 
@@ -21,9 +24,7 @@ pub struct Buffer {
     pub data: Box<[u8], BufferAlloc>,
 }
 
-
 impl Buffer {
-
     fn blocks_required_for(s: usize) -> usize {
         if s == 0 {
             return 1; // TODO: ???
@@ -38,13 +39,11 @@ impl Buffer {
         let blocks_reqd = Buffer::blocks_required_for(sz_bytes);
         let buf_sz = blocks_reqd * 512;
         unsafe {
-            let uninited: Box<[u8], BufferAlloc> = 
-                Box::new_zeroed_slice_in(
-                    buf_sz, 
-                    BufferAlloc).assume_init();
+            let uninited: Box<[u8], BufferAlloc> =
+                Box::new_zeroed_slice_in(buf_sz, BufferAlloc).assume_init();
             Buffer {
                 data: uninited,
-                n_blocks: blocks_reqd
+                n_blocks: blocks_reqd,
             }
         }
     }
@@ -72,7 +71,7 @@ impl IndexMut<Range<usize>> for Buffer {
 
 #[cfg(test)]
 mod tests {
-    use crate::{buffer::Buffer};
+    use crate::buffer::Buffer;
 
     #[test]
     fn test_alignment() {

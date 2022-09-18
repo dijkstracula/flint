@@ -4,7 +4,7 @@
 #![feature(pointer_is_aligned)]
 #![feature(seek_stream_len)]
 
+mod buffer;
 pub mod errors;
 pub mod fs;
 pub mod handle;
-mod buffer;
