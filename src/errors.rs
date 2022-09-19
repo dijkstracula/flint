@@ -1,7 +1,7 @@
 use packed_struct::prelude::*;
 use rustix::io::Errno;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     UnknownErrno,
     NotABlockDevice,

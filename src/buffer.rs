@@ -3,6 +3,7 @@ use std::{
     ops::{Index, IndexMut, Range},
 };
 
+
 const BYTES_PER_BLOCK: usize = 512;
 
 pub struct BufferAlloc;
@@ -25,7 +26,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    fn blocks_required_for(s: usize) -> usize {
+    pub fn blocks_required_for(s: usize) -> usize {
         if s == 0 {
             return 1; // TODO: ???
         }
@@ -35,18 +36,23 @@ impl Buffer {
         return s / BYTES_PER_BLOCK + 1;
     }
 
-    pub fn new(sz_bytes: usize) -> Buffer {
+    pub fn new_in_bytes(sz_bytes: usize) -> Buffer {
         let blocks_reqd = Buffer::blocks_required_for(sz_bytes);
-        let buf_sz = blocks_reqd * 512;
+        Buffer::new_in_blocks(blocks_reqd)
+    }
+
+    pub fn new_in_blocks(sz_blocks: usize) -> Buffer {
+        let sz_bytes = sz_blocks * BYTES_PER_BLOCK;
         unsafe {
             let uninited: Box<[u8], BufferAlloc> =
-                Box::new_zeroed_slice_in(buf_sz, BufferAlloc).assume_init();
+                Box::new_zeroed_slice_in(sz_bytes, BufferAlloc).assume_init();
             Buffer {
                 data: uninited,
-                n_blocks: blocks_reqd,
+                n_blocks: sz_blocks,
             }
         }
     }
+
 }
 
 impl Index<usize> for Buffer {
@@ -71,16 +77,16 @@ impl IndexMut<Range<usize>> for Buffer {
 
 #[cfg(test)]
 mod tests {
-    use crate::buffer::Buffer;
+    use crate::buffer::{Buffer, BYTES_PER_BLOCK};
 
     #[test]
     fn test_alignment() {
         const BYTES: usize = 14;
-        let b = Buffer::new(BYTES);
+        let b = Buffer::new_in_bytes(BYTES);
 
         assert_eq!(b.n_blocks, 1);
-        assert_eq!(b.data.len(), 512);
-        assert!(b.data.as_ptr().is_aligned_to(512));
+        assert_eq!(b.data.len(), BYTES_PER_BLOCK);
+        assert!(b.data.as_ptr().is_aligned_to(BYTES_PER_BLOCK));
     }
 
     #[test]
@@ -97,4 +103,5 @@ mod tests {
 
         assert_eq!(Buffer::blocks_required_for(1025), 3);
     }
+
 }

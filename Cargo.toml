@@ -9,3 +9,6 @@ edition = "2021"
 linux-raw-sys = "0.0.46"
 packed_struct = "0.10.0"
 rustix = { version = "0.35.9", features = ["fs"] }
+
+[dev-dependencies]
+proptest = "1.0.0"

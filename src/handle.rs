@@ -50,7 +50,7 @@ impl<F: Read + Write + Seek> Handle<F> {
             backing_store: backing_store,
         };
 
-        let mut buf = Buffer::new(1);
+        let mut buf = Buffer::new_in_bytes(1);
 
         h.backing_store.rewind()?;
         h.backing_store.read(&mut buf.data)?;
@@ -65,7 +65,7 @@ impl<F: Read + Write + Seek> Handle<F> {
     fn init(&mut self) -> Result<(), Error> {
         let blob = Header::new().pack()?;
 
-        let mut buf = Buffer::new(1);
+        let mut buf = Buffer::new_in_bytes(1);
         buf[0..blob.len()].copy_from_slice(&blob);
 
         self.backing_store.rewind()?;
@@ -73,7 +73,13 @@ impl<F: Read + Write + Seek> Handle<F> {
         Ok(())
     }
 
-    pub fn read(&mut self, buf: &mut Buffer, block: usize) -> Result<(), Error> {
+    pub fn read_blocks(&mut self, blk_start: usize, n_blocks: usize) -> Result<Buffer, Error> {
+        let mut buf = Buffer::new_in_blocks(n_blocks);
+        self.read_into_buf(&mut buf, blk_start)?;
+        Ok(buf)
+    }
+
+    pub fn read_into_buf(&mut self, buf: &mut Buffer, block: usize) -> Result<(), Error> {
         let byte_offset: u64 = byte_offset_for(block);
         if byte_offset + buf.data.len() as u64 > self.len {
             return Err(Error::AfterEOFAccess);
