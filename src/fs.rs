@@ -25,29 +25,29 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use crate::{buffer::Buffer, handle, errors::Error};
-    
+    use crate::{buffer::Buffer, errors::Error, handle};
+
     use proptest::prelude::*;
 
-    /*
     #[test]
     fn fs_on_blk_dev() {
         assert!(handle::for_block_device("/dev/nonexistent").is_err());
 
-        assert!(!handle::for_block_device("/dev/xvdb").is_err());
-
         let h = handle::for_block_device("/dev/xvdb");
-        assert!(!h.is_err());
+        if h.is_err() {
+            return;
+        }
+
         let mut h = h.unwrap();
 
         let msg = "Writing to offset 1 in block 0".as_bytes();
-        let mut buf = Buffer::new(1);
+
+        let mut buf = h.read_blocks(0, 1).unwrap();
         buf[1..(1 + msg.len())].copy_from_slice(&msg);
 
         let res = h.write(&buf, 0);
         assert!(res.is_ok());
     }
-    */
 
     #[test]
     fn fs_in_mem_rw() {
@@ -66,12 +66,12 @@ mod tests {
 
         let res = h.write(&buf, 0);
         assert!(res.is_ok());
-        
+
         /* Read it back in. */
         let mut buf = Buffer::new_in_bytes(1);
         let res = h.read_into_buf(&mut buf, 0);
         assert!(res.is_ok());
-        assert_eq!(&buf[1..1+expected_read.len()], expected_read);
+        assert_eq!(&buf[1..1 + expected_read.len()], expected_read);
     }
 
     #[test]
@@ -93,7 +93,7 @@ mod tests {
     proptest! {
         #[test]
         fn test_rand_read(
-            devblocks in 10..256usize, 
+            devblocks in 10..256usize,
             bufblocks in 1..10usize) {
             let mut h = handle::for_inmem(devblocks).unwrap();
 
@@ -104,7 +104,7 @@ mod tests {
 
         #[test]
         fn test_rand_rw(
-            devblocks in 10..256usize, 
+            devblocks in 10..256usize,
             bufblocks in 1..10usize,
             val in 0..255u8) {
             const block_begin: usize = 0; /* TODO: how to vary this as part of the test and ensure it's in bounds? */

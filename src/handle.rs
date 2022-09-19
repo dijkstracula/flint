@@ -1,7 +1,8 @@
+use std::cell::RefCell;
 use std::convert::TryInto;
 use std::fs::File;
-use std::io::{Cursor, Read, Seek, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::io::Seek;
+use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::Path;
 
 use linux_raw_sys::general::S_IFBLK;
@@ -12,9 +13,28 @@ use crate::buffer::Buffer;
 use crate::errors::Error;
 use crate::fs::{Header, MAGIC_BYTES};
 
-pub struct Handle<F: Read + Write + Seek> {
+pub struct Handle<F> {
     backing_store: F,
     len: u64,
+}
+
+pub struct InMem(RefCell<Vec<u8>>);
+
+impl FileExt for InMem {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+        let begin = offset as usize;
+        let end = begin + buf.len();
+
+        buf.copy_from_slice(&self.0.borrow()[begin..end]);
+        Ok(buf.len())
+    }
+
+    fn write_at(&self, buf: &[u8], offset: u64) -> std::io::Result<usize> {
+        let begin = offset as usize;
+        let end = begin + buf.len();
+        self.0.borrow_mut()[begin..end].copy_from_slice(&buf);
+        Ok(buf.len())
+    }
 }
 
 fn byte_offset_for(block: usize) -> u64 {
@@ -25,7 +45,7 @@ fn byte_offset_for(block: usize) -> u64 {
 pub fn for_block_device(filename: &str) -> Result<Handle<File>, Error> {
     let path = Path::new(filename);
 
-    let f = File::options()
+    let mut f = File::options()
         .read(true)
         .write(true)
         .custom_flags(linux_raw_sys::general::O_DIRECT.try_into().unwrap())
@@ -36,24 +56,22 @@ pub fn for_block_device(filename: &str) -> Result<Handle<File>, Error> {
         return Err(Error::NotABlockDevice);
     }
 
-    Handle::new(f)
+    let sz = f.stream_len()?;
+    Handle::new(f, sz)
 }
 
-pub fn for_inmem(blocks: usize) -> Result<Handle<Cursor<Vec<u8>>>, Error> {
-    Handle::new(Cursor::new(vec![0; 512 + blocks * 512]))
+pub fn for_inmem(blocks: usize) -> Result<Handle<InMem>, Error> {
+    let len = 512 + blocks * 512;
+    Handle::new(InMem(RefCell::new(vec![0; len])), len as u64)
 }
 
-impl<F: Read + Write + Seek> Handle<F> {
-    fn new(mut backing_store: F) -> Result<Handle<F>, Error> {
-        let mut h = Handle {
-            len: (&mut backing_store).stream_len()?,
-            backing_store: backing_store,
-        };
+impl<F: FileExt> Handle<F> {
+    fn new(mut backing_store: F, len: u64) -> Result<Handle<F>, Error> {
+        let mut h = Handle { len, backing_store };
 
         let mut buf = Buffer::new_in_bytes(1);
 
-        h.backing_store.rewind()?;
-        h.backing_store.read(&mut buf.data)?;
+        h.backing_store.read_at(&mut buf.data, 0)?;
 
         if buf[0..4] != MAGIC_BYTES {
             h.init()?;
@@ -68,8 +86,7 @@ impl<F: Read + Write + Seek> Handle<F> {
         let mut buf = Buffer::new_in_bytes(1);
         buf[0..blob.len()].copy_from_slice(&blob);
 
-        self.backing_store.rewind()?;
-        self.backing_store.write_all(&buf.data)?;
+        self.backing_store.write_all_at(&buf.data, 0)?;
         Ok(())
     }
 
@@ -85,9 +102,9 @@ impl<F: Read + Write + Seek> Handle<F> {
             return Err(Error::AfterEOFAccess);
         }
 
-        self.backing_store
-            .seek(std::io::SeekFrom::Start(byte_offset))?;
-        let res = self.backing_store.read_exact(&mut buf.data)?;
+        let res = self
+            .backing_store
+            .read_exact_at(&mut buf.data, byte_offset)?;
         Ok(res)
     }
 
@@ -97,10 +114,7 @@ impl<F: Read + Write + Seek> Handle<F> {
             return Err(Error::AfterEOFAccess);
         }
 
-        self.backing_store
-            .seek(std::io::SeekFrom::Start(byte_offset))?;
-
-        let res = self.backing_store.write_all(&buf.data)?;
+        let res = self.backing_store.write_all_at(&buf.data, byte_offset)?;
         Ok(res)
     }
 }

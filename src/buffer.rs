@@ -3,7 +3,6 @@ use std::{
     ops::{Index, IndexMut, Range},
 };
 
-
 const BYTES_PER_BLOCK: usize = 512;
 
 pub struct BufferAlloc;
@@ -52,7 +51,6 @@ impl Buffer {
             }
         }
     }
-
 }
 
 impl Index<usize> for Buffer {
@@ -103,5 +101,4 @@ mod tests {
 
         assert_eq!(Buffer::blocks_required_for(1025), 3);
     }
-
 }
