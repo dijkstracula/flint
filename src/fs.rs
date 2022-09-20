@@ -92,7 +92,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_rand_read(
+        fn test_read(
             devblocks in 10..256usize,
             bufblocks in 1..10usize) {
             let mut h = handle::for_inmem(devblocks).unwrap();
@@ -105,9 +105,9 @@ mod tests {
         #[test]
         fn test_rand_rw(
             devblocks in 10..256usize,
-            bufblocks in 1..10usize,
-            val in 0..255u8) {
-            const block_begin: usize = 0; /* TODO: how to vary this as part of the test and ensure it's in bounds? */
+            bufblocks in 1..10usize) {
+            let val = 0xdb;
+            const BLOCK_BEGIN: usize = 0; /* TODO: how to vary this as part of the test and ensure it's in bounds? */
 
             let mut h = handle::for_inmem(devblocks).unwrap();
 
@@ -116,9 +116,9 @@ mod tests {
             for v in buf.data.iter_mut() {
                 *v = val;
             }
-            h.write(&buf, block_begin).unwrap();
+            h.write(&buf, BLOCK_BEGIN).unwrap();
 
-            let buf = h.read_blocks(block_begin, bufblocks).unwrap();
+            let buf = h.read_blocks(BLOCK_BEGIN, bufblocks).unwrap();
             for v in buf.data.iter() {
                 assert_eq!(*v, val);
             }
